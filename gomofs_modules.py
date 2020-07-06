@@ -7,10 +7,9 @@ get the data from Gulf of Maine Ocean Forecast System with function get_gomofs
 
 Modification: March 15, 2019
 - added a function(get_gomofs_url_forcast(date,forcastdate=1))
+
 Modification: March 20, 2019
 - updated a way to get gomofs temperature, tht faster than before
-Modification: Feb 28, 2020
-- made a much simpler function "get_gomofs" to get bottom temp and renamed Lei Zhao's as "get_gomofs_zl" 
 """
 import netCDF4
 import datetime
@@ -34,10 +33,10 @@ def get_gomofs_url(date):
     returns the url of data
     """
 #    print('start calculate the url!') 
-    #date=date+datetime.timedelta(hours=4.5)
+#    date=date+datetime.timedelta(hours=4.5)
     date_str=date.strftime('%Y%m%d%H%M%S')
     hours=int(date_str[8:10])+int(date_str[10:12])/60.+int(date_str[12:14])/3600.
-    tn=int(math.floor((hours)/6.0)*6)  ## for examole: t12z the number is 12
+    tn=int(math.floor((hours)/6.0)*6)  ## for example: t12z the number is 12
     if len(str(tn))==1:
         tstr='t0'+str(tn)+'z'   # tstr in url represent hour string :t00z
     else:
@@ -46,8 +45,11 @@ def get_gomofs_url(date):
         nstr='n006'       # nstr in url represent nowcast string: n003 or n006
     else:
         nstr='n003'
-    url='http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/GOMOFS/MODELS/'\
-    +date_str[:6]+'/nos.gomofs.fields.'+nstr+'.'+date_str[:8]+'.'+tstr+'.nc'
+    # Jim changed 7/6/2020
+    url='https://www.ncei.noaa.gov/thredds/dodsC/model-gomofs-files/'+str(date.year)+'/'+str(date.month).zfill(2)+'/nos.gomofs.fields.'+nstr+'.'+date_str[:8]+'.'+tstr+'.nc'
+    
+    #url='http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/GOMOFS/MODELS/'\
+    #+date_str[:6]+'/nos.gomofs.fields.'+nstr+'.'+date_str[:8]+'.'+tstr+'.nc'
     return url
 
 def get_gomofs_url_forecast(date,forecastdate=True):
@@ -59,7 +61,7 @@ def get_gomofs_url_forecast(date,forecastdate=True):
     """
     if forcastdate==True:  #if forcastdate is True: default the forcast date equal to the time of choose file.
         forcastdate=date
-    date=date-datetime.timedelta(hours=1.5)  #the parameter of calculate txx(eg:t00,t06 and so on)
+    #date=date-datetime.timedelta(hours=1.5)  #the parameter of calculate txx(eg:t00,t06 and so on)
     tn=int(math.floor(date.hour/6.0)*6)  #the numer of hours in time index: eg: t12, the number is 12
     ymdh=date.strftime('%Y%m%d%H%M%S')[:10]  #for example:2019011112(YYYYmmddHH)
     if len(str(tn))==1:
@@ -74,49 +76,6 @@ def get_gomofs_url_forecast(date,forecastdate=True):
     url='http://opendap.co-ops.nos.noaa.gov/thredds/dodsC/NOAA/GOMOFS/MODELS/'\
     +ymdh[:6]+'/nos.gomofs.fields.'+fstr+'.'+ymdh[:8]+'.'+tstr+'.nc'
     return url
-
-def get_gomofs(date_time,lat,lon,depth='bottom',mindistance=20):# JiM's simple version for bottom temp
-    """
-    JiM's simplified version of Lei Zhao's function gets only bottom temp
-    the format time(GMT) is: datetime.datetime(2019, 2, 27, 11, 56, 51, 666857)
-    lat and lon use decimal degrees
-    return the temperature of specify location
-    HARDCODED TO RETURN BOTTOM TEMP
-    """
-    rho_index=0 # for bottom layer
-    if depth==99999:
-        depth='bottom'
-        rho_index=0
-    if not gomofs_coordinaterange(lat,lon):
-        print('lat and lon out of range in gomofs')
-        return np.nan
-    if date_time<datetime.datetime.strptime('2018-07-01 00:00:00','%Y-%m-%d %H:%M:%S'):
-        print('Time out of range, time start :2018-07-01 00:00:00z')
-        return np.nan
-    if date_time>datetime.datetime.utcnow()+datetime.timedelta(days=3): #forecast time under 3 days
-        print('forecast time under 3 days')
-        return np.nan
-    #start download data
-    url=get_gomofs_url(date_time)
-    nc=netCDF4.Dataset(str(url))
-    gomofs_lons=nc.variables['lon_rho'][:]
-    gomofs_lats=nc.variables['lat_rho'][:]
-    gomofs_rho=nc.variables['s_rho']
-    #gomofs_h=nc.variables['h']
-    gomofs_h=nc.variables['h'][:]
-    gomofs_temp=nc.variables['temp']
-    #caculate the index of the nearest four points using a "find_nd" function in Lei Zhao's conversion module   
-    target_distance=2*zl.dist(lat1=gomofs_lats[0][0],lon1=gomofs_lons[0][0],lat2=gomofs_lats[0][1],lon2=gomofs_lons[0][1])
-    eta_rho,xi_rho=zl.find_nd(target=target_distance,lat=lat,lon=lon,lats=gomofs_lats,lons=gomofs_lons)
-    
-    if zl.dist(lat1=lat,lon1=lon,lat2=gomofs_lats[eta_rho][xi_rho],lon2=gomofs_lons[eta_rho][xi_rho])>mindistance:
-        print('THE location is out of range')
-        return np.nan
-    temperature=gomofs_temp[0][rho_index][eta_rho][xi_rho]
-    depth=gomofs_h[eta_rho][xi_rho]
-    #temperature=float(gomofs_temp[0,rho_index,eta_rho,xi_rho].data)
-    #return temperature
-    return temperature,depth
 
 def get_gomofs_zl(date_time,lat,lon,depth='bottom',mindistance=20,autocheck=True,fortype='temperature'):
     """
@@ -183,8 +142,7 @@ def get_gomofs_zl(date_time,lat,lon,depth='bottom',mindistance=20,autocheck=True
                 gomofs_lons=nc.variables['lon_rho'][:]
                 gomofs_lats=nc.variables['lat_rho'][:]
                 gomofs_rho=nc.variables['s_rho']
-                #gomofs_h=nc.variables['h']
-                gomofs_h=nc.variables['h'][:]
+                gomofs_h=nc.variables['h']
                 gomofs_temp=nc.variables['temp']
                 readcheck,changefile=0,0   #if read data successfully, we do not need to loop
                # print('end read data.')
@@ -230,13 +188,13 @@ def get_gomofs_zl(date_time,lat,lon,depth='bottom',mindistance=20,autocheck=True
     if xi_rho==len(gomofs_lats[0])-1:
         eta_rho=len(gomofs_lats[0])-2
    # print('start caculate the bottom depth of point location!') 
-    while True:
-        points_h=[[gomofs_lats[eta_rho][xi_rho],gomofs_lons[eta_rho][xi_rho],gomofs_h[eta_rho,xi_rho]],
+   #while True:
+    points_h=[[gomofs_lats[eta_rho][xi_rho],gomofs_lons[eta_rho][xi_rho],gomofs_h[eta_rho,xi_rho]],
              [gomofs_lats[eta_rho,(xi_rho-1)],gomofs_lons[eta_rho,(xi_rho-1)],gomofs_h[eta_rho,(xi_rho-1)]],
              [gomofs_lats[eta_rho,(xi_rho+1)],gomofs_lons[eta_rho,(xi_rho+1)],gomofs_h[eta_rho,(xi_rho+1)]],
              [gomofs_lats[(eta_rho-1),xi_rho],gomofs_lons[(eta_rho-1),xi_rho],gomofs_h[(eta_rho-1),xi_rho]],
              [gomofs_lats[(eta_rho+1),xi_rho],gomofs_lons[(eta_rho+1),xi_rho],gomofs_h[(eta_rho+1),xi_rho]]]
-        break
+    #    break
     point_h=zl.fitting(points_h,lat,lon) 
     # caculate the rho index
     if depth=='bottom':
@@ -248,12 +206,12 @@ def get_gomofs_zl(date_time,lat,lon,depth='bottom',mindistance=20,autocheck=True
                 distance_h=gomofs_rho[k]*point_h-depth
                 rho_index=k        
     #estimate the temperature of point location
-    while True:  
-        points_temp=[[gomofs_lats[eta_rho,xi_rho],gomofs_lons[eta_rho,xi_rho],gomofs_temp[0][rho_index][eta_rho][xi_rho]],
-             [gomofs_lats[eta_rho,(xi_rho-1)],gomofs_lons[eta_rho,(xi_rho-1)],gomofs_temp[0][rho_index][eta_rho,(xi_rho-1)]],
-             [gomofs_lats[eta_rho,(xi_rho+1)],gomofs_lons[eta_rho,(xi_rho+1)],gomofs_temp[0][rho_index][eta_rho][(xi_rho+1)]],             
-             [gomofs_lats[(eta_rho-1),xi_rho],gomofs_lons[(eta_rho-1),xi_rho],gomofs_temp[0][rho_index][(eta_rho-1)][xi_rho]],
-             [gomofs_lats[(eta_rho-1),xi_rho],gomofs_lons[(eta_rho-1),xi_rho],gomofs_temp[0][rho_index][(eta_rho-1)][xi_rho]]]
+    while True:
+        points_temp=[[gomofs_lats[eta_rho,xi_rho],gomofs_lons[eta_rho,xi_rho],gomofs_temp[0,rho_index,eta_rho,xi_rho]],
+             [gomofs_lats[eta_rho,(xi_rho-1)],gomofs_lons[eta_rho,(xi_rho-1)],gomofs_temp[0,rho_index,eta_rho,(xi_rho-1)]],
+             [gomofs_lats[eta_rho,(xi_rho+1)],gomofs_lons[eta_rho,(xi_rho+1)],gomofs_temp[0,rho_index,eta_rho,(xi_rho+1)]],
+             [gomofs_lats[(eta_rho-1),xi_rho],gomofs_lons[(eta_rho-1),xi_rho],gomofs_temp[0,rho_index,(eta_rho-1),xi_rho]],
+             [gomofs_lats[(eta_rho-1),xi_rho],gomofs_lons[(eta_rho-1),xi_rho],gomofs_temp[0,rho_index,(eta_rho-1),xi_rho]]]
         break
     temperature=zl.fitting(points_temp,lat,lon)
     # if input depth out of the bottom, print the prompt message
@@ -265,6 +223,47 @@ def get_gomofs_zl(date_time,lat,lon,depth='bottom',mindistance=20,autocheck=True
         return temperature,point_h
     else:
         return temperature
+
+def get_gomofs(date_time,lat,lon,depth='bottom',mindistance=20):# JiM's simple version for bottom temp
+    """
+    JiM's simplified version of Lei Zhao's function
+    the format time(GMT) is: datetime.datetime(2019, 2, 27, 11, 56, 51, 666857)
+    lat and lon use decimal degrees
+    return the temperature of specify location
+    HARDCODED TO RETURN BOTTOM TEMP
+    """
+    rho_index=0 # for bottom layer
+    if depth==99999:
+        depth='bottom'
+        rho_index=0
+    if not gomofs_coordinaterange(lat,lon):
+        print('lat and lon out of range in gomofs')
+        return np.nan
+    if date_time<datetime.datetime.strptime('2018-07-01 00:00:00','%Y-%m-%d %H:%M:%S'):
+        print('Time out of range, time start :2018-07-01 00:00:00z')
+        return np.nan
+    if date_time>datetime.datetime.utcnow()+datetime.timedelta(days=3): #forecast time under 3 days
+        print('forecast time under 3 days')
+        return np.nan
+    #start download data
+    url=get_gomofs_url(date_time)
+    nc=netCDF4.Dataset(str(url))
+    gomofs_lons=nc.variables['lon_rho'][:]
+    gomofs_lats=nc.variables['lat_rho'][:]
+    gomofs_rho=nc.variables['s_rho']
+    gomofs_h=nc.variables['h']
+    gomofs_temp=nc.variables['temp']
+    #caculate the index of the nearest four points using a "find_nd" function in Lei Zhao's conversion module   
+    target_distance=2*zl.dist(lat1=gomofs_lats[0][0],lon1=gomofs_lons[0][0],lat2=gomofs_lats[0][1],lon2=gomofs_lons[0][1])
+    eta_rho,xi_rho=zl.find_nd(target=target_distance,lat=lat,lon=lon,lats=gomofs_lats,lons=gomofs_lons)
+    
+    if zl.dist(lat1=lat,lon1=lon,lat2=gomofs_lats[eta_rho][xi_rho],lon2=gomofs_lons[eta_rho][xi_rho])>mindistance:
+        print('THE location is out of range')
+        return np.nan
+    temperature=gomofs_temp[0][rho_index][eta_rho][xi_rho]
+    #temperature=float(gomofs_temp[0,rho_index,eta_rho,xi_rho].data)
+    return temperature
+
 
 
 def contours_depth_temp_gomfs(output_path,date_time,lat=41.784712,lon=-69.231081,depth='bottom',addlon=.3,addlat=.3,mod_points='yes',depth_contours_interval=[20, 50,100,150,200,500]):
